@@ -29,7 +29,7 @@ import requests, os, time, sys, json
 Webhook = "" # Insert the webhook URL here.
 
 # Identify the folder to write our files to.
-Folder = "C:/Users/ldevi/Videos/Replays/Submitted"
+Folder = "C:/Users/*****/Videos/Replays/Submitted"
 
 # Make sure our directory is created.
 if not os.path.exists(Folder):
