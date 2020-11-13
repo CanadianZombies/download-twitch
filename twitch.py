@@ -62,9 +62,14 @@ Clip_Query_Timer = 300 # 300 seconds = 5 minutes
 # block certain characters from being within the request (we will just strip them later on when I have time to write it)
 invalid_chars = ["?", "\\", "/", "*", ":", "<", ">", "|", '"']
 
+###########################################################################################################
 # our twitch creds are empty, we load from file, but we initiate an empty data here
 # because sometimes people need to see things to understand them. (Me included)
 Twitch_Creds = ""
+Twitch_Secret = ""
+Twitch_ID = ""
+Twitch_Access_Token = ""
+Twitch_Headers = ""
 
 ###########################################################################################################
 ## Function: Main
@@ -80,8 +85,8 @@ def Main():
 	if GoneOffline:
 	    print(f"According to our last check, {Streamer}, has gone offline.")
 	
-	#Is the streamer online (will return 0 if true)
-	if Check_User_Online(Streamer) == 0:
+	#Is the streamer online (will return 1 if true)
+	if Check_User_Online(Streamer) == 1:
 	    if GoneOffline:
 		print(f"{Streamer} is back online! Suspect connection hiccup.")
 		
@@ -110,26 +115,60 @@ def Main():
 		# this would be a 25 minute timer
 		time.sleep(Clip_Query_Timer * 5)
 	
+###########################################################################################################
+## Function: Read_Twitch_Config
+## Arguments: none
+def Read_Twitch_Config():
+    configFile = open("Config.txt")
+    for line in configFile:
+        if line.startswith("Client_ID:"):
+            Twitch_ID = line[line.index(":")+1:].strip()
+        elif line.startswith("Client_Secret:"):
+            Twitch_Secret = line[line.index(":")+1:].strip()
+    configFile.close()
 
+###########################################################################################################
+## Function: Get_Twitch_Token
+## Arguments: none
+##
+## This is required to populate use the new API, we need our access token
+##
+def Get_Twitch_Token():
+    autURL = "https://id.twitch.tv/oauth2/token"
+    autParams={"client_id": Twitch_ID, "client_secret": Twitch_Secret, "grant_type": "client_credentials"}
+    autCall = requests.post(url=autURL, params=autParams)
+    autData=autCall.json()
+    Twitch_Access_Token = autData["access_token"]
+
+	
 ###########################################################################################################
 ## Function: Check_User_Online
 ## Arguments: none
 ##
 def Check_User_Online(user):
-    # Twitch returns the following data
-    # returns 0: online, 1: offline, 2: not found, 3: error """
-    url = 'https://api.twitch.tv/kraken/streams/' + user
+
+    # Okay, build the stream URL path
+    streamsURL = "https://api.twitch.tv/helix/streams"
+
+    # our parameters, we just need our streamer name.
+    params = {"user_login": f"{Streamer}"} #used to pass the username to the API call
+
+    # lets connect to twitch and find out if the stream is live!
+    StreamerJSon = requests.get(url=streamsURL, headers=Twitch_Headers, params=params).json()
+    stream = StreamerJSon.get('data') 
+
     try:
-        info = json.loads(urlopen(url, timeout = 15).read().decode('utf-8'))
-        if info['stream'] == None:
-            status = 1
-        else:
-            status = 0
-    except URLError as e:
-        if e.reason == 'Not Found' or e.reason == 'Unprocessable Entity':
-            status = 2
-        else:
-            status = 3
+	# Identify if we are live or not.
+        isLive = stream[0]['type'] == "live" 
+    except: #there is no data, and therefore the streamer is not live
+        isLive = False
+
+    if isLive:
+	status = 1
+    else:
+	status = 0
+
+    # return our status because science
     return status
 	
 ###########################################################################################################
@@ -138,13 +177,13 @@ def Check_User_Online(user):
 ##
 def Download_Clips(total_clips):
 
-    headers = {'Accept':"application/vnd.twitchtv.v5+json", 'Client-ID': Twitch_Creds}
+    dl_headers = {'Accept':"application/vnd.twitchtv.v5+json", 'Client-ID': Twitch_Creds}
 
     # Initialize our clips to 0
     Clips = []
 
     #kraken API (v5) may no longer work. We will check fully on Monday and adjust accordingly.
-    response = requests.get("https://api.twitch.tv/kraken/clips/top", params = {"channel": Streamer, "trending": "false", "period": Period_To_Check, "limit": total_clips, "language": "en"}, headers=headers).json()
+    response = requests.get("https://api.twitch.tv/kraken/clips/top", params = {"channel": Streamer, "trending": "false", "period": Period_To_Check, "limit": total_clips, "language": "en"}, headers=dl_headers).json()
     Clips.append(response)
         
     for json_holder in Clips:
@@ -233,12 +272,20 @@ def Download_Clips(total_clips):
 ## Ensure we have our twitch_creds.dat file (required for twitch api)
 ## visit Twitch API Client ID: https://dev.twitch.tv/console/apps/create 
 ## to create an app and use the code here.
-## This can be removed once the twitch_creds.dat file exists.
 ##
-if not os.path.exists("twitch_creds.dat"):
-    Twitch_Creds = input("Enter twitch client ID from dev console (For Twitch API): ")
-    Twitch_Creds_File= open("twitch_creds.dat", "w+").write(ClientID)
+## This reads in our credentials from a flat-file. This is required for the new non-kraken based API.
+Read_Twitch_Config()
 
+###########################################################################################################
+## Now that we got the data out of the config file, we will attempt to get our token. This will grant us
+## access to the API properly, and we will be able to work accordingly.
+Get_Twitch_Token()
+
+print(Twitch_ID)
+print(Twitch_Access_Token)
+
+# build our globally used header (multitasking at its best)
+Twitch_Headers = {"Client-ID": Twitch_ID, "Authorization": "Bearer " + Twitch_Access_Token}
 
 ###########################################################################################################
 ## --- Instantiate the main function and begin our forever loop (5 minutes between each check against twitch)
