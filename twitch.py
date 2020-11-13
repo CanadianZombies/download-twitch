@@ -15,12 +15,23 @@
 # Instagram: https://instagram.com/LiveSimmy                                                              #
 # Facebook:  https://facebook.com/LiveSimmy                                                               #
 ###########################################################################################################
+# Twitch Kraken API:    https://dev.twitch.tv/docs/v5                (deprecated)                         #
+# Twitch API Reference: https://dev.twitch.tv/docs/api/reference                                          #
+###########################################################################################################
+
 
 #import our required systems
 ###########################################################################################################
 # Note:  pip install requests
+#        pip install twitch
 #        otherwise this will not function.
 import requests, os, time, sys, json
+
+# This is required for all modern twitch pulls. Some of the API may work, however it looks like I may have
+# to replace the kraken pulls with a modern twitch pull. If the V5 kraken pulls still work, we will leave it
+# as is and develop further as required. However it appears that this may no longer be viable.
+# this is required moving forward for modern API.
+from twitchAPI.twitch import Twitch
 
 ###########################################################################################################
 # Our Discord WebHook URL
@@ -60,13 +71,67 @@ Twitch_Creds = ""
 ## Arguments: none
 ##
 def Main():
-
+    GoneOffline = false
+    WasOnline = false
     # We loop till someone forcably closes us. Because we want to live forever!
     while True:
         os.system("cls")
-        Download_Clips(Clips_To_Download, Period_To_Check)
-        time.sleep(Clip_Query_Timer)
 
+	if GoneOffline:
+	    print(f"According to our last check, {Streamer}, has gone offline.")
+	
+	#Is the streamer online (will return 0 if true)
+	if Check_User_Online(Streamer) == 0:
+	    if GoneOffline:
+		print(f"{Streamer} is back online! Suspect connection hiccup.")
+		
+	    WasOnline = true
+	    Download_Clips(Clips_To_Download, Period_To_Check)
+	    GoneOffline = false
+	    
+	    #this would be a 5 minute timer.
+            time.sleep(Clip_Query_Timer)
+	else:
+	    # we don't care what other response we got, stream is offline
+	    # or not existent user. But we digress, we will use our other
+	    # checks to verify what is going on.
+	    if WasOnline:
+		Download_Clips(Clips_To_Download, Period_To_Check)
+		GoneOffline = true
+		WasOnline = false
+		# this would be a 10 minute timer
+		time.sleep(Clip_Query_Timer * 2)
+	    else:
+		# we were not online, we completely reset data, and wait a long time
+		# this is because we don't want to spam twitch with needless queries
+		# so we simply change out our state.
+	        WasOnline = false
+		GoneOffline = false
+		# this would be a 25 minute timer
+		time.sleep(Clip_Query_Timer * 5)
+	
+
+###########################################################################################################
+## Function: Check_User_Online
+## Arguments: none
+##
+def Check_User_Online(user):
+    # Twitch returns the following data
+    # returns 0: online, 1: offline, 2: not found, 3: error """
+    url = 'https://api.twitch.tv/kraken/streams/' + user
+    try:
+        info = json.loads(urlopen(url, timeout = 15).read().decode('utf-8'))
+        if info['stream'] == None:
+            status = 1
+        else:
+            status = 0
+    except URLError as e:
+        if e.reason == 'Not Found' or e.reason == 'Unprocessable Entity':
+            status = 2
+        else:
+            status = 3
+    return status
+	
 ###########################################################################################################
 ## Function: Download_Clips
 ## Arguments: total amount of clips
@@ -78,6 +143,7 @@ def Download_Clips(total_clips):
     # Initialize our clips to 0
     Clips = []
 
+    #kraken API (v5) may no longer work. We will check fully on Monday and adjust accordingly.
     response = requests.get("https://api.twitch.tv/kraken/clips/top", params = {"channel": Streamer, "trending": "false", "period": Period_To_Check, "limit": total_clips, "language": "en"}, headers=headers).json()
     Clips.append(response)
         
