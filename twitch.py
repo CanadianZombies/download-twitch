@@ -39,6 +39,9 @@ from twitchAPI.twitch import Twitch
 # so we will put our webhook here.
 Webhook = "" # Insert the webhook URL here.
 
+# This will be used in your 'footer' and will be assigned to your post title url.
+Discord_Icon_Url = ""
+
 # Identify the folder to write our files to.
 Folder = "C:/Users/*****/Videos/Replays/Submitted"
 
@@ -65,55 +68,59 @@ invalid_chars = ["?", "\\", "/", "*", ":", "<", ">", "|", '"']
 ###########################################################################################################
 # our twitch creds are empty, we load from file, but we initiate an empty data here
 # because sometimes people need to see things to understand them. (Me included)
-Twitch_Creds = ""
-Twitch_Secret = ""
-Twitch_ID = ""
-Twitch_Access_Token = ""
-Twitch_Headers = ""
+globalTwitch_Creds = ''
+Twitch_Secret = ''
+Twitch_ID = ''
+Twitch_Access_Token = ''
+Twitch_Headers = ''
 
 ###########################################################################################################
 ## Function: Main
 ## Arguments: none
 ##
 def Main():
-    GoneOffline = false
-    WasOnline = false
+    GoneOffline = False
+    WasOnline = False
+
+
+    print ("We will now loop till death!")
     # We loop till someone forcably closes us. Because we want to live forever!
     while True:
-        os.system("cls")
-
-	if GoneOffline:
-	    print(f"According to our last check, {Streamer}, has gone offline.")
+        if GoneOffline:
+            print(f"According to our last check, {Streamer}, has gone offline.")
 	
 	#Is the streamer online (will return 1 if true)
-	if Check_User_Online(Streamer) == 1:
-	    if GoneOffline:
-		print(f"{Streamer} is back online! Suspect connection hiccup.")
-		
-	    WasOnline = true
-	    Download_Clips(Clips_To_Download, Period_To_Check)
-	    GoneOffline = false
+        if Check_User_Online(Streamer) == 1:
+            if GoneOffline:
+                print(f"{Streamer} is back online! Suspect connection hiccup.")
+            else:
+                print(f"{Streamer} is online, checking for new clips!")
+            WasOnline = True
+            Download_Clips(Clips_To_Download)
+            GoneOffline = False
 	    
 	    #this would be a 5 minute timer.
             time.sleep(Clip_Query_Timer)
-	else:
+        else:
 	    # we don't care what other response we got, stream is offline
 	    # or not existent user. But we digress, we will use our other
 	    # checks to verify what is going on.
-	    if WasOnline:
-		Download_Clips(Clips_To_Download, Period_To_Check)
-		GoneOffline = true
-		WasOnline = false
+            if WasOnline:
+                print(f"{Streamer} has gone offline currently.")
+                Download_Clips(Clips_To_Download, Period_To_Check)
+                GoneOffline = true
+                WasOnline = False
 		# this would be a 10 minute timer
-		time.sleep(Clip_Query_Timer * 2)
-	    else:
+                time.sleep(Clip_Query_Timer * 2)
+            else:
 		# we were not online, we completely reset data, and wait a long time
 		# this is because we don't want to spam twitch with needless queries
 		# so we simply change out our state.
-	        WasOnline = false
-		GoneOffline = false
+                WasOnline = False
+                GoneOffline = False
+                print(f"{Streamer} is currently offline.")
 		# this would be a 25 minute timer
-		time.sleep(Clip_Query_Timer * 5)
+                time.sleep(Clip_Query_Timer * 5)
 	
 ###########################################################################################################
 ## Function: Read_Twitch_Config
@@ -123,8 +130,10 @@ def Read_Twitch_Config():
     for line in configFile:
         if line.startswith("Client_ID:"):
             Twitch_ID = line[line.index(":")+1:].strip()
+            print(Twitch_ID)
         elif line.startswith("Client_Secret:"):
             Twitch_Secret = line[line.index(":")+1:].strip()
+            print(Twitch_Secret)
     configFile.close()
 
 ###########################################################################################################
@@ -134,10 +143,16 @@ def Read_Twitch_Config():
 ## This is required to populate use the new API, we need our access token
 ##
 def Get_Twitch_Token():
+    global Twitch_ID
+    global Twitch_Secret
+    global Twitch_Access_Token
     autURL = "https://id.twitch.tv/oauth2/token"
     autParams={"client_id": Twitch_ID, "client_secret": Twitch_Secret, "grant_type": "client_credentials"}
     autCall = requests.post(url=autURL, params=autParams)
+    print (autParams)
+    print (autCall)
     autData=autCall.json()
+    print(autData)
     Twitch_Access_Token = autData["access_token"]
 
 	
@@ -164,9 +179,9 @@ def Check_User_Online(user):
         isLive = False
 
     if isLive:
-	status = 1
+        status = 1
     else:
-	status = 0
+        status = 0
 
     # return our status because science
     return status
@@ -177,7 +192,7 @@ def Check_User_Online(user):
 ##
 def Download_Clips(total_clips):
 
-    dl_headers = {'Accept':"application/vnd.twitchtv.v5+json", 'Client-ID': Twitch_Creds}
+    dl_headers = {'Accept':"application/vnd.twitchtv.v5+json", 'Client-ID': Twitch_ID}
 
     # Initialize our clips to 0
     Clips = []
@@ -185,28 +200,32 @@ def Download_Clips(total_clips):
     #kraken API (v5) may no longer work. We will check fully on Monday and adjust accordingly.
     response = requests.get("https://api.twitch.tv/kraken/clips/top", params = {"channel": Streamer, "trending": "false", "period": Period_To_Check, "limit": total_clips, "language": "en"}, headers=dl_headers).json()
     Clips.append(response)
-        
+
+    print (response)
+    
     for json_holder in Clips:
-        for json in json_holder["clips"]:
+        for json_data in json_holder["clips"]:
         
             ###########################################################################################################
             #Thanks to @CommanderRoot for the quick references to help set this up. (https://twitter.com/CommanderRoot/status/1326963131134996482?s=20)
             #Twitch API Guide:  https://dev.twitch.tv/docs/api/reference#get-clips
             #This is why I @ people on twitter, this was a huge help for setting this up.
 
-            title = ''.join(i for i in json["title"] if i not in invalid_chars)
-            Category = ''.join(i for i in json["game"] if i not in invalid_chars)
-            Channel = ''.join(i for i in json["broadcaster"]["display_name"] if i not in invalid_chars)
+            print (json)
 
+            title = ''.join(i for i in json_data["title"] if i not in invalid_chars)
+            slug = ''.join(i for i in json_data["slug"] if i not in invalid_chars)
+            Category = ''.join(i for i in json_data["game"] if i not in invalid_chars)
+            Channel = ''.join(i for i in json_data["broadcaster"]["display_name"] if i not in invalid_chars)
+            created_at = json_data["created_at"]
             #for use in the discord integration (webhook w/embeds)
-            preview_url = json["vod"]["preview_image_url"]
+            preview_url = json_data["thumbnails"]["medium"]
 
             #this pythonic enough?
-            vod_url = json["vod"]["preview_image_url"].replace('-preview.jpg', '.mp4')
-            id = json["vod"]["id"]
+            vod_url = json_data["vod"]["preview_image_url"].replace('-preview.jpg', '.mp4')
 
             # Identify the file-to save.
-            Filename = f"{Folder}/{id}-{Streamer}-{title}.mp4"
+            Filename = f"{Folder}/{slug}.mp4"
             if not os.path.exists(Filename):
                 
                 # grab the download link from twitch and retrieve the file.
@@ -218,7 +237,7 @@ def Download_Clips(total_clips):
                         fd.write(chunk)
                 
                 # debugging purposes, identify the title downloaded.
-                print(f"Downloaded: {id}-{Streamer}-{title}.mp4")
+                print(f"Downloaded: {slug}.mp4")
 
 
                 ###########################################################################################################
@@ -227,27 +246,61 @@ def Download_Clips(total_clips):
                     data = {}
 
                     #for all params, see https://discordapp.com/developers/docs/resources/webhook#execute-webhook
-                    data["content"] = "The latest clip by {Streamer}."
-                    data["avatar_url"] = "https://www.canada.ca/content/dam/themes/defence/caf/militaryhistory/dhh/ranks/army-corporal.png"
+                    data["content"] = f"The latest clip by {Streamer} @ {created_at}."
+                    data["tts"] = "false"
+
                     data["username"] = "Cpl Bloggins"
+                    data["timestamp"] = f"{created_at}"
+                    data["image"] = f"{preview_url}"                    
 
                     #leave this out if you dont want an embed
                     data["embeds"] = []
                     embed = {}
 
                     #for all params, see https://discordapp.com/developers/docs/resources/channel#embed-object
-                    embed["description"] = "{Category}"
-                    embed["title"] = "{title}"
-                    embed["url"] = "{vod_url}"
+                    embed["description"] = f"{Category}"
+                    embed["title"] = f"{slug}"
 
-                    # This may not work Expect issues.
-                    embed["thumbnail"]["url"] = "{preview_url}"
+                    embed["url"] = f"https://clips.twitch.tv/{slug}"
 
+                    # build our dicts, because, science.
+                    embed["author"] = {}
+                    embed["thumbnail"] = {}
+                    embed["image"] = {}
+                    embed["footer"] = {}
+                    
+
+                    author = {}
+                    author["name"] = f"{Streamer}"
+                    author["url"] = "https://www.twitch.tv/simmydizzle"
+                    author["icon_url"] = f"{Discord_Icon_Url}"
+
+                    footer = {}
+                    footer["text"] = "This post was automatically grabbed from twitch and posted. Bot Life."
+                    footer["icon_url"] = f"{Discord_Icon_Url}"
+
+                    thumbnail = {}
+                    thumbnail["url"] = f"{preview_url}"
+
+                    image = {}
+                    image["url"] = f"{preview_url}"
+
+                    embed["author"].update(author)
+                    embed["thumbnail"].update(thumbnail)
+                    embed["image"].update(image)
+                    embed["footer"].update(footer)
+
+
+
+                    #  Compile our embedded data properly.
                     data["embeds"].append(embed)
+
 
                     # turn the array into proper json formated content.
                     converted_data = json.dumps(data);
+                    print (converted_data)
 
+                    # Lets connect to the webhook
                     result = requests.post(Webhook, converted_data, headers={"Content-Type": "application/json"})
 
                     try:
@@ -263,7 +316,7 @@ def Download_Clips(total_clips):
             ## Path already exists? Means we got the file already, ignore it. (for now we log that we got it for testing)
             else: 
                 # For debugging purposes, we leave this here.
-                print(f"Already Downloaded: {id}-{title}.mp4")
+                print(f"Already Downloaded: {slug}.mp4")
 
     # Cleanup our list of clips.
     Clips = []
@@ -284,8 +337,9 @@ Get_Twitch_Token()
 print(Twitch_ID)
 print(Twitch_Access_Token)
 
-# build our globally used header (multitasking at its best)
+# build our globally used header (multitasking at its best)`    1``
 Twitch_Headers = {"Client-ID": Twitch_ID, "Authorization": "Bearer " + Twitch_Access_Token}
+print (Twitch_Headers)
 
 ###########################################################################################################
 ## --- Instantiate the main function and begin our forever loop (5 minutes between each check against twitch)
