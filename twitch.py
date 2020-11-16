@@ -126,6 +126,8 @@ def Main():
 ## Function: Read_Twitch_Config
 ## Arguments: none
 def Read_Twitch_Config():
+    global Twitch_ID
+    global Twitch_Secret
     configFile = open("Config.txt")
     for line in configFile:
         if line.startswith("Client_ID:"):
