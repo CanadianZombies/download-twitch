@@ -36,13 +36,17 @@ Client_Secret: <Your Client Secret here>
 # Configure your script
 
 In twitch.py, in the "Webhook" variable, put in your DISCORD webhook, if you need help creating a webhook, please use google
+
 In twitch.py, in the "Discord_Icon_Url" put a link to the picture you want to use as your icon URL.
 
 In twitch.py, in the "Folder" variable, put the folder that you wish to use for your videos. Ex: C:/Videos
+
 In twitch.py, in the "Streamer" variable, put the name of the streamer you want to monitor for new clips, it is defaulted to SimmyDizzle
 
 You can configure your times for how often to check, 'period' is set to day, no need to change this.
+
 You can also configure how many clips to download in a pass, I set it to 10, any more than that seems like overkill
+
 You can also change how often it queries twitch. 300 is the default value, this is 5 minutes. From there we have multipliers later on to change this value accordingly.
 
 
