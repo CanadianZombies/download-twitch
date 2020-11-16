@@ -30,8 +30,11 @@ Then have it re-generate your secret and copy it.
 # Config.txt
 Create Config.txt in the same directory as your twitch.py.
 Put this in the file.
-Client_ID: <Your Client ID here>
-Client_Secret: <Your Client Secret here>
+
+Client_ID: Your Client ID here
+
+Client_Secret: Your Client Secret here
+
 
 # Configure your script
 
