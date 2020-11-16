@@ -75,6 +75,20 @@ Twitch_Access_Token = ''
 Twitch_Headers = ''
 
 ###########################################################################################################
+## Function: Reconnect
+## Arguments: none
+##
+## This will connect and download the twitch token again, which expires, so this is vital to reconnect every
+## now and then to ensure we do not expire. Based on 5 minute intervals, 
+def Reconnect():
+    Get_Twitch_Token()
+    global Twitch_Headers
+
+    # build our globally used header (multitasking at its best)
+    Twitch_Headers = {"Client-ID": Twitch_ID, "Authorization": "Bearer " + Twitch_Access_Token}
+    print (Twitch_Headers)
+
+###########################################################################################################
 ## Function: Main
 ## Arguments: none
 ##
@@ -82,10 +96,20 @@ def Main():
     GoneOffline = False
     WasOnline = False
 
-
+    loopCount = 0
     print ("We will now loop till death!")
     # We loop till someone forcably closes us. Because we want to live forever!
     while True:
+        loopCount = loopCount +1
+
+        ##################################################################################################
+        # tell the system to reconnect and get our new token
+        # should prevent our script from timing out.
+        if loopCount == 12: # 12 will be 1hr in 5 minute intervals (math), this will be longer when not live.
+            Reconnect()
+            loopCount = 0
+            print(f"Reconnected to {Streamer} from client ID: {Twitch_ID}.")
+	
         if GoneOffline:
             print(f"According to our last check, {Streamer}, has gone offline.")
 	
@@ -174,15 +198,14 @@ def Check_User_Online(user):
     StreamerJSon = requests.get(url=streamsURL, headers=Twitch_Headers, params=params).json()
     stream = StreamerJSon.get('data') 
 
+    print (stream[0]['type'])
     try:
 	# Identify if we are live or not.
-        isLive = stream[0]['type'] == "live" 
+        if stream[0]['type'] == 'live':
+            status = 1
+        else:
+            status = 0
     except: #there is no data, and therefore the streamer is not live
-        isLive = False
-
-    if isLive:
-        status = 1
-    else:
         status = 0
 
     # return our status because science
@@ -334,14 +357,7 @@ Read_Twitch_Config()
 ###########################################################################################################
 ## Now that we got the data out of the config file, we will attempt to get our token. This will grant us
 ## access to the API properly, and we will be able to work accordingly.
-Get_Twitch_Token()
-
-print(Twitch_ID)
-print(Twitch_Access_Token)
-
-# build our globally used header (multitasking at its best)`    1``
-Twitch_Headers = {"Client-ID": Twitch_ID, "Authorization": "Bearer " + Twitch_Access_Token}
-print (Twitch_Headers)
+Reconnect()
 
 ###########################################################################################################
 ## --- Instantiate the main function and begin our forever loop (5 minutes between each check against twitch)
