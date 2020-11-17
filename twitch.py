@@ -37,21 +37,17 @@ from twitchAPI.twitch import Twitch
 # Our Discord WebHook URL
 # Webhooks allow us to post this data into our Discord chat automatically, which is pretty frikken stellar.
 # so we will put our webhook here.
-Webhook = "" # Insert the webhook URL here.
+Webhook = ""
 
 # This will be used in your 'footer' and will be assigned to your post title url.
 Discord_Icon_Url = ""
 
 # Identify the folder to write our files to.
-Folder = "C:/Users/*****/Videos/Replays/Submitted"
-
-# Make sure our directory is created.
-if not os.path.exists(Folder):
-    os.mkdir(Folder)
+Folder = ""
 
 ###########################################################################################################
 # Name the streamer to monitor
-Streamer = "SimmyDizzle"
+Streamer = ""
 
 # How far back to check in the archive of clips to download
 Period_To_Check = "day"
@@ -88,6 +84,7 @@ def Reconnect():
     Twitch_Headers = {"Client-ID": Twitch_ID, "Authorization": "Bearer " + Twitch_Access_Token}
     print (Twitch_Headers)
 
+
 ###########################################################################################################
 ## Function: Main
 ## Arguments: none
@@ -97,6 +94,7 @@ def Main():
     WasOnline = False
 
     loopCount = 0
+
     print ("We will now loop till death!")
     # We loop till someone forcably closes us. Because we want to live forever!
     while True:
@@ -109,12 +107,13 @@ def Main():
             Reconnect()
             loopCount = 0
             print(f"Reconnected to {Streamer} from client ID: {Twitch_ID}.")
-	
+        
         if GoneOffline:
             print(f"According to our last check, {Streamer}, has gone offline.")
 	
 	#Is the streamer online (will return 1 if true)
-        if Check_User_Online(Streamer) == 1:
+        #if Check_User_Online(Streamer) == 1:
+        if 1 == 1:
             if GoneOffline:
                 print(f"{Streamer} is back online! Suspect connection hiccup.")
             else:
@@ -131,7 +130,7 @@ def Main():
 	    # checks to verify what is going on.
             if WasOnline:
                 print(f"{Streamer} has gone offline currently.")
-                Download_Clips(Clips_To_Download, Period_To_Check)
+                Download_Clips(Clips_To_Download)
                 GoneOffline = true
                 WasOnline = False
 		# this would be a 10 minute timer
@@ -152,14 +151,36 @@ def Main():
 def Read_Twitch_Config():
     global Twitch_ID
     global Twitch_Secret
+    global Webhook
+    global Discord_Icon_Url
+    global Streamer
+    global Folder
+
     configFile = open("Config.txt")
     for line in configFile:
         if line.startswith("Client_ID:"):
             Twitch_ID = line[line.index(":")+1:].strip()
-            print(Twitch_ID)
+            print(f"Client ID: {Twitch_ID}")
         elif line.startswith("Client_Secret:"):
             Twitch_Secret = line[line.index(":")+1:].strip()
-            print(Twitch_Secret)
+            print(f"Client Secret: {Twitch_Secret}")
+        elif line.startswith("Webhook:"):
+            Webhook = line[line.index(":")+1:].strip()
+            print(f"Webhook: {Webhook}")
+        elif line.startswith("Discord_Icon_Url:"):
+            Discord_Icon_Url = line[line.index(":")+1:].strip()
+            print(f"Discord_Icon_Url: {Discord_Icon_Url}")
+        elif line.startswith("Streamer:"):
+            Streamer = line[line.index(":")+1:].strip()
+            print(f"Streamer: {Streamer}")
+        elif line.startswith("Folder:"):
+            Folder = line[line.index(":")+1:].strip()
+            print(f"Folder: {Folder}")
+
+    # Make sure our directory is created.
+    if not os.path.exists(Folder):
+        os.mkdir(Folder)
+    
     configFile.close()
 
 ###########################################################################################################
@@ -175,10 +196,7 @@ def Get_Twitch_Token():
     autURL = "https://id.twitch.tv/oauth2/token"
     autParams={"client_id": Twitch_ID, "client_secret": Twitch_Secret, "grant_type": "client_credentials"}
     autCall = requests.post(url=autURL, params=autParams)
-    print (autParams)
-    print (autCall)
     autData=autCall.json()
-    print(autData)
     Twitch_Access_Token = autData["access_token"]
 
 	
@@ -198,7 +216,6 @@ def Check_User_Online(user):
     StreamerJSon = requests.get(url=streamsURL, headers=Twitch_Headers, params=params).json()
     stream = StreamerJSon.get('data') 
 
-    print (stream[0]['type'])
     try:
 	# Identify if we are live or not.
         if stream[0]['type'] == 'live':
@@ -226,8 +243,6 @@ def Download_Clips(total_clips):
     response = requests.get("https://api.twitch.tv/kraken/clips/top", params = {"channel": Streamer, "trending": "false", "period": Period_To_Check, "limit": total_clips, "language": "en"}, headers=dl_headers).json()
     Clips.append(response)
 
-    print (response)
-    
     for json_holder in Clips:
         for json_data in json_holder["clips"]:
         
@@ -273,7 +288,6 @@ def Download_Clips(total_clips):
                     #for all params, see https://discordapp.com/developers/docs/resources/webhook#execute-webhook
                     data["content"] = f"The latest clip by {Streamer} @ {created_at}."
                     data["tts"] = "false"
-
                     data["username"] = "Cpl Bloggins"
                     data["timestamp"] = f"{created_at}"
                     data["image"] = f"{preview_url}"                    
@@ -316,7 +330,6 @@ def Download_Clips(total_clips):
                     embed["footer"].update(footer)
 
 
-
                     #  Compile our embedded data properly.
                     data["embeds"].append(embed)
 
@@ -339,9 +352,10 @@ def Download_Clips(total_clips):
                     print("Discord Webhooks not currently installed.")
             ###########################################################################################################
             ## Path already exists? Means we got the file already, ignore it. (for now we log that we got it for testing)
-            else: 
+            ## Not required unless debugging.
+            #else: 
                 # For debugging purposes, we leave this here.
-                print(f"Already Downloaded: {slug}.mp4")
+                #print(f"Already Downloaded: {slug}.mp4")
 
     # Cleanup our list of clips.
     Clips = []
