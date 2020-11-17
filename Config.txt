@@ -1,0 +1,6 @@
+Client_ID: your-client-id-gere
+Client_Secret: your-client-secret-here
+Webhook: https://discordapp.com/api/webhooks/your-webhook-here
+Discord_Icon_Url: https://media1.tenor.com/images/62a90c39c4449180529867d6a28b9ceb/tenor.gif
+Folder: C:/Videos/Replays
+Streamer: SimmyDizzle
