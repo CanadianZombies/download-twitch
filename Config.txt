@@ -1,6 +1,23 @@
-Client_ID: your-client-id-gere
+##########################################################################################################
+#The client identification provided by twitch
+Client_ID: your-client-id-here
+##########################################################################################################
+#The client identification secret provided by twitch
 Client_Secret: your-client-secret-here
-Webhook: https://discordapp.com/api/webhooks/your-webhook-here
+##########################################################################################################
+#The discord webhook, this is an address provided when creating a new webhook
+Webhook: your-discord-webhook-here
+##########################################################################################################
+#This is the icon url you require for your bot.
 Discord_Icon_Url: https://media1.tenor.com/images/62a90c39c4449180529867d6a28b9ceb/tenor.gif
-Folder: C:/Videos/Replays
+##########################################################################################################
+#This is the folder where you want to put your files, use '/' to separate directories.
+Folder: C:/Users/Videos/Replays
+##########################################################################################################
+#This is the name of the streamer you want to follow
 Streamer: SimmyDizzle
+##########################################################################################################
+#This is the nitro status, true or false, if the server is nitro, we will upload the video to discord
+#if this is false, we simply embed the twitch link.
+Nitro: true
+#EOF
