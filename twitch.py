@@ -23,15 +23,23 @@
 #import our required systems
 ###########################################################################################################
 # Note:  pip install requests
-#        pip install twitch
+#        pip install twitchAPI
+#        pip install discord-webhook
 #        otherwise this will not function.
-import requests, os, time, sys, json
+import requests, os, time, sys, json, shutil, urllib
 
+###########################################################################################################
+# import our discord data
+from discord_webhook import DiscordWebhook, DiscordEmbed
+  
 # This is required for all modern twitch pulls. Some of the API may work, however it looks like I may have
 # to replace the kraken pulls with a modern twitch pull. If the V5 kraken pulls still work, we will leave it
 # as is and develop further as required. However it appears that this may no longer be viable.
 # this is required moving forward for modern API.
 from twitchAPI.twitch import Twitch
+
+# get the datetime
+from datetime import datetime
 
 ###########################################################################################################
 # Our Discord WebHook URL
@@ -41,6 +49,9 @@ Webhook = ""
 
 # This will be used in your 'footer' and will be assigned to your post title url.
 Discord_Icon_Url = ""
+
+#set the default NitroStatus to False.  This will be read in from the config later.
+NitroStatus = False
 
 # Identify the folder to write our files to.
 Folder = ""
@@ -62,6 +73,10 @@ Clip_Query_Timer = 300 # 300 seconds = 5 minutes
 invalid_chars = ["?", "\\", "/", "*", ":", "<", ">", "|", '"']
 
 ###########################################################################################################
+LOG_MODE = True
+PRINT_LOG = True
+
+###########################################################################################################
 # our twitch creds are empty, we load from file, but we initiate an empty data here
 # because sometimes people need to see things to understand them. (Me included)
 globalTwitch_Creds = ''
@@ -69,6 +84,38 @@ Twitch_Secret = ''
 Twitch_ID = ''
 Twitch_Access_Token = ''
 Twitch_Headers = ''
+
+def Timestamp():
+    dateTimeObj = datetime.now()
+    timestampStr = dateTimeObj.strftime("%d-%b-%Y (%H:%M:%S.%f)")
+
+    return timestampStr
+
+###########################################################################################################
+## Function: WriteLog
+## Arguments: string
+##
+## example: WriteLog(f"Some data {data}")
+def WriteLog(str):
+    # write the log to the flat-file
+    if LOG_MODE == True:
+        log_dir = f"{os.path.dirname(os.path.realpath(__file__))}/logs"
+
+        # make sure our log-directory exists!
+        if not os.path.exists(log_dir):
+            os.mkdir(log_dir)
+
+        date = datetime.now()
+        pathN = date.strftime("%d-%b_%Y")
+
+        logF = open(f"{log_dir}/log_{pathN}.txt", "a")
+        logF.write(f"{Timestamp()}: {str}\n")
+        logF.close()
+
+    # write the log to the console?
+    if PRINT_LOG == True:
+        print(f"{Timestamp()}: {str}")
+    
 
 ###########################################################################################################
 ## Function: Reconnect
@@ -82,7 +129,10 @@ def Reconnect():
 
     # build our globally used header (multitasking at its best)
     Twitch_Headers = {"Client-ID": Twitch_ID, "Authorization": "Bearer " + Twitch_Access_Token}
-    print (Twitch_Headers)
+
+    ts = Timestamp()
+
+    WriteLog (f"{Twitch_Headers}")
 
 
 ###########################################################################################################
@@ -95,29 +145,31 @@ def Main():
 
     loopCount = 0
 
-    print ("We will now loop till death!")
+    WriteLog ("We will now loop till death!")
     # We loop till someone forcably closes us. Because we want to live forever!
     while True:
         loopCount = loopCount +1
-
+        ts = Timestamp()
+        
         ##################################################################################################
         # tell the system to reconnect and get our new token
         # should prevent our script from timing out.
         if loopCount == 12: # 12 will be 1hr in 5 minute intervals (math), this will be longer when not live.
             Reconnect()
             loopCount = 0
-            print(f"Reconnected to {Streamer} from client ID: {Twitch_ID}.")
+            WriteLog(f"Reconnected to {Streamer} from client ID: {Twitch_ID}.")
         
         if GoneOffline:
-            print(f"According to our last check, {Streamer}, has gone offline.")
+            WriteLog(f"According to our last check, {Streamer}, has gone offline.")
 	
 	#Is the streamer online (will return 1 if true)
-        #if Check_User_Online(Streamer) == 1:
-        if 1 == 1:
+        if Check_User_Online(Streamer) == 1:
+        #if 1 == 1:
             if GoneOffline:
-                print(f"{Streamer} is back online! Suspect connection hiccup.")
+                WriteLog(f"{Streamer} is back online! Suspect connection hiccup.")
             else:
-                print(f"{Streamer} is online, checking for new clips!")
+                WriteLog(f"{Streamer} is online, checking for new clips!")
+                
             WasOnline = True
             Download_Clips(Clips_To_Download)
             GoneOffline = False
@@ -129,9 +181,9 @@ def Main():
 	    # or not existent user. But we digress, we will use our other
 	    # checks to verify what is going on.
             if WasOnline:
-                print(f"{Streamer} has gone offline currently.")
+                WriteLog(f"{Streamer} has gone offline currently.")
                 Download_Clips(Clips_To_Download)
-                GoneOffline = true
+                GoneOffline = True
                 WasOnline = False
 		# this would be a 10 minute timer
                 time.sleep(Clip_Query_Timer * 2)
@@ -141,7 +193,7 @@ def Main():
 		# so we simply change out our state.
                 WasOnline = False
                 GoneOffline = False
-                print(f"{Streamer} is currently offline.")
+                WriteLog(f"{Streamer} is currently offline.")
 		# this would be a 25 minute timer
                 time.sleep(Clip_Query_Timer * 5)
 	
@@ -155,32 +207,46 @@ def Read_Twitch_Config():
     global Discord_Icon_Url
     global Streamer
     global Folder
-
+    global NitroStatus
+    
     configFile = open("Config.txt")
     for line in configFile:
         if line.startswith("Client_ID:"):
             Twitch_ID = line[line.index(":")+1:].strip()
-            print(f"Client ID: {Twitch_ID}")
+            WriteLog(f"Client ID: {Twitch_ID}")
         elif line.startswith("Client_Secret:"):
             Twitch_Secret = line[line.index(":")+1:].strip()
-            print(f"Client Secret: {Twitch_Secret}")
+            WriteLog(f"Client Secret: {Twitch_Secret}")
         elif line.startswith("Webhook:"):
             Webhook = line[line.index(":")+1:].strip()
-            print(f"Webhook: {Webhook}")
+            WriteLog(f"Webhook: {Webhook}")
         elif line.startswith("Discord_Icon_Url:"):
             Discord_Icon_Url = line[line.index(":")+1:].strip()
-            print(f"Discord_Icon_Url: {Discord_Icon_Url}")
+            WriteLog(f"Discord_Icon_Url: {Discord_Icon_Url}")
         elif line.startswith("Streamer:"):
             Streamer = line[line.index(":")+1:].strip()
-            print(f"Streamer: {Streamer}")
+            WriteLog(f"Streamer: {Streamer}")
         elif line.startswith("Folder:"):
             Folder = line[line.index(":")+1:].strip()
-            print(f"Folder: {Folder}")
+            WriteLog(f"Folder: {Folder}")
+        elif line.startswith("Nitro:"):
+            strToView = line[line.index(":")+1:].strip()
+            if strToView == 'true':
+                NitroStatus = True
+            else:
+                NitroStatus = False
+            WriteLog(f"NitroStatus: {NitroStatus}")
+        elif line.startswith("#"):
+            # do nothing
+            doNothing = True #this is here to just stop stupid warnings for now.
+        else:
+            WriteLog(f"Unknown field in Config.txt: {line}")
+            
 
     # Make sure our directory is created.
     if not os.path.exists(Folder):
         os.mkdir(Folder)
-    
+
     configFile.close()
 
 ###########################################################################################################
@@ -233,7 +299,8 @@ def Check_User_Online(user):
 ## Arguments: total amount of clips
 ##
 def Download_Clips(total_clips):
-
+    global NitroStatus
+    
     dl_headers = {'Accept':"application/vnd.twitchtv.v5+json", 'Client-ID': Twitch_ID}
 
     # Initialize our clips to 0
@@ -251,7 +318,8 @@ def Download_Clips(total_clips):
             #Twitch API Guide:  https://dev.twitch.tv/docs/api/reference#get-clips
             #This is why I @ people on twitter, this was a huge help for setting this up.
 
-            print (json)
+            #This is *PURE* debugging, when looking at the json data
+            #print (json)
 
             title = ''.join(i for i in json_data["title"] if i not in invalid_chars)
             slug = ''.join(i for i in json_data["slug"] if i not in invalid_chars)
@@ -275,15 +343,72 @@ def Download_Clips(total_clips):
                 with open(Filename, 'wb') as fd:
                     for chunk in response.iter_content(chunk_size=100000):
                         fd.write(chunk)
-                
+
                 # debugging purposes, identify the title downloaded.
-                print(f"Downloaded: {slug}.mp4")
+                WriteLog(f"Downloaded: {slug}.mp4")
 
 
                 ###########################################################################################################
                 ## Discord integration
                 if Webhook:
                     data = {}
+
+                    wh = DiscordWebhook(url=Webhook)
+
+                    embed = DiscordEmbed(title=f"Clip: {slug}", description=f"Content: {Category}\n\r [Clip here on Twitch](https://clips.twitch.tv/{slug})", color=242424)
+
+                    embed.set_author(name=f"{Streamer}", url=f"https://www.twitch.tv/{Streamer}", icon_url=f"{Discord_Icon_Url}")
+
+                    embed.set_thumbnail(url=f"{preview_url}")
+                    embed.set_timestamp()
+
+
+                    ################################################################
+                    # attempt a work-around for twitch, as they convert : instead of dropping them like a normal website would.
+                    catAttempt = f"{Category}"
+                    catAttempt = catAttempt.replace(":", "%3A")
+                    
+
+                    # add fields to embed
+                    catFix = urllib.parse.quote(f"{catAttempt}")
+
+                    #not quite yet, TODO: Fix this, it does not turn : into %3A, must ensure all values are properly converted
+                    #so that twitch will recognize the game properly when linked, but it is coming.
+                    print(catFix)
+                    
+                    embed.add_embed_field(name='Game', value=f"[{Category}](https://www.twitch.tv/directory/game/{catFix})")
+                    embed.add_embed_field(name='Channel', value=f'[{Streamer}](https://www.twitch.tv/{Streamer})')
+
+                    #if NitroStatus == True:
+                    # Here we will attempt to FFMPEG the file to a smaller file size
+                    # as to allow us to upload the video, however Discord has file size restraints
+                    # that we must account for first.
+                    # The max webhook size is 8mb: https://discord.com/developers/docs/resources/channel#create-message
+                    # so this will not be 'fool proof' unless discord increases the limits from 8mb.
+                    # so we will attempt to upload the file, if we are successful, great, if-not, we will push the
+                    # link to the clip URL.
+                    #    with open(f"{Filename}", "rb") as f:
+                    #        wh.add_file(file=f.read(), filename=f"{slug}.mp4")
+                    #else:
+                    embed.set_image(url=f"{preview_url}")
+                    #embed.set_video(url=f"{vod_url}")
+
+                    embed.set_footer(text=f"This post was automatically grabbed from twitch and posted. Bot Life.\n\r")
+
+                    #attempt to post our embeded file.
+                    wh.add_embed(embed)
+                    response = wh.execute()
+                    
+                    #now we check the response code and see if the file was too large.
+                    #if it is too large, we will just attach it the old fashioned way.
+                    #nitro servers can have up to 100mb uploads.
+                    #at level 3. Base file size maxes out at 2mb, level 1, at 8mb. etc.
+                    
+                    #this is still to be done, as it stands I have no means to test if this
+                    #will work on larger servers, so I have left it out for the moment.
+
+                    
+                    '''
 
                     #for all params, see https://discordapp.com/developers/docs/resources/webhook#execute-webhook
                     data["content"] = f"The latest clip by {Streamer} @ {created_at}."
@@ -307,7 +432,9 @@ def Download_Clips(total_clips):
                     embed["thumbnail"] = {}
                     embed["image"] = {}
                     embed["footer"] = {}
-                    
+
+                    # this is used for attaching video files.
+                    embed["files"] = {}
 
                     author = {}
                     author["name"] = f"{Streamer}"
@@ -326,8 +453,18 @@ def Download_Clips(total_clips):
 
                     embed["author"].update(author)
                     embed["thumbnail"].update(thumbnail)
-                    embed["image"].update(image)
                     embed["footer"].update(footer)
+
+                    myfiles = {}
+
+                    # let us attempt to upload the file to discord, because, science?
+                    if NitroStatus == True:
+                        #okay, do it.
+                        files = {}
+                        files["attachment"] = f"{slug}.mp4"
+                        files["name"] = f"{slug}"
+                    else:
+                        embed["image"].update(image)
 
 
                     #  Compile our embedded data properly.
@@ -336,26 +473,33 @@ def Download_Clips(total_clips):
 
                     # turn the array into proper json formated content.
                     converted_data = json.dumps(data);
-                    print (converted_data)
+                    print (f"{Timestamp()}:{converted_data}")
 
                     # Lets connect to the webhook
-                    result = requests.post(Webhook, converted_data, headers={"Content-Type": "application/json"})
+                    if NitroStatus == True:
+                        result = requests.post(Webhook, files=myfiles, headers={"Content-Type": "multipart/form-data"})
+                        #os.remove(f"{slug}.mp4")
+                    else:
+                        result = requests.post(Webhook, converted_data, headers={"Content-Type": "application/json"})
 
                     try:
                         result.raise_for_status()
                     except requests.exceptions.HTTPError as discordError:
-                        print(discordError)
+                        print(f"{Timestamp()}:{discordError}")
                     else:
-                        print("Discord successfully recieved the package, code {}.".format(result.status_code))
+                        print(f"{Timestamp()}:Discord successfully recieved the package, code {result.status_code}.")
+
+                    #os.remove(f"{slug}.mp4")
+                    '''
                 else:
                     # Debugging purposes
-                    print("Discord Webhooks not currently installed.")
+                    WriteLog("Discord Webhooks not currently installed.")
             ###########################################################################################################
             ## Path already exists? Means we got the file already, ignore it. (for now we log that we got it for testing)
             ## Not required unless debugging.
-            #else: 
+            else: 
                 # For debugging purposes, we leave this here.
-                #print(f"Already Downloaded: {slug}.mp4")
+                WriteLog(f"Already Downloaded: {slug}.mp4")
 
     # Cleanup our list of clips.
     Clips = []
