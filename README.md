@@ -21,6 +21,7 @@ I will do my best to help people configure this for their streams.
 Please use pip to install the following systems
 pip install requests
 pip install twitchAPI
+pip install discord-webhook
 
 These are required to connect to twitch and discord.
 
