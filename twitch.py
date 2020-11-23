@@ -323,7 +323,7 @@ def Download_Clips(total_clips):
 
             title = ''.join(i for i in json_data["title"] if i not in invalid_chars)
             slug = ''.join(i for i in json_data["slug"] if i not in invalid_chars)
-            Category = ''.join(i for i in json_data["game"] if i not in invalid_chars)
+            Category = json_data["game"]
             Channel = ''.join(i for i in json_data["broadcaster"]["display_name"] if i not in invalid_chars)
             created_at = json_data["created_at"]
             #for use in the discord integration (webhook w/embeds)
@@ -366,15 +366,13 @@ def Download_Clips(total_clips):
                     ################################################################
                     # attempt a work-around for twitch, as they convert : instead of dropping them like a normal website would.
                     catAttempt = f"{Category}"
-                    catAttempt = catAttempt.replace(":", "%3A")
-                    
 
                     # add fields to embed
                     catFix = urllib.parse.quote(f"{catAttempt}")
 
                     #not quite yet, TODO: Fix this, it does not turn : into %3A, must ensure all values are properly converted
                     #so that twitch will recognize the game properly when linked, but it is coming.
-                    print(catFix)
+                    print(f"catFix: {catFix}")
                     
                     embed.add_embed_field(name='Game', value=f"[{Category}](https://www.twitch.tv/directory/game/{catFix})")
                     embed.add_embed_field(name='Channel', value=f'[{Streamer}](https://www.twitch.tv/{Streamer})')
@@ -407,90 +405,7 @@ def Download_Clips(total_clips):
                     #this is still to be done, as it stands I have no means to test if this
                     #will work on larger servers, so I have left it out for the moment.
 
-                    
-                    '''
 
-                    #for all params, see https://discordapp.com/developers/docs/resources/webhook#execute-webhook
-                    data["content"] = f"The latest clip by {Streamer} @ {created_at}."
-                    data["tts"] = "false"
-                    data["username"] = "Cpl Bloggins"
-                    data["timestamp"] = f"{created_at}"
-                    data["image"] = f"{preview_url}"                    
-
-                    #leave this out if you dont want an embed
-                    data["embeds"] = []
-                    embed = {}
-
-                    #for all params, see https://discordapp.com/developers/docs/resources/channel#embed-object
-                    embed["description"] = f"{Category}"
-                    embed["title"] = f"{slug}"
-
-                    embed["url"] = f"https://clips.twitch.tv/{slug}"
-
-                    # build our dicts, because, science.
-                    embed["author"] = {}
-                    embed["thumbnail"] = {}
-                    embed["image"] = {}
-                    embed["footer"] = {}
-
-                    # this is used for attaching video files.
-                    embed["files"] = {}
-
-                    author = {}
-                    author["name"] = f"{Streamer}"
-                    author["url"] = "https://www.twitch.tv/simmydizzle"
-                    author["icon_url"] = f"{Discord_Icon_Url}"
-
-                    footer = {}
-                    footer["text"] = "This post was automatically grabbed from twitch and posted. Bot Life."
-                    footer["icon_url"] = f"{Discord_Icon_Url}"
-
-                    thumbnail = {}
-                    thumbnail["url"] = f"{preview_url}"
-
-                    image = {}
-                    image["url"] = f"{preview_url}"
-
-                    embed["author"].update(author)
-                    embed["thumbnail"].update(thumbnail)
-                    embed["footer"].update(footer)
-
-                    myfiles = {}
-
-                    # let us attempt to upload the file to discord, because, science?
-                    if NitroStatus == True:
-                        #okay, do it.
-                        files = {}
-                        files["attachment"] = f"{slug}.mp4"
-                        files["name"] = f"{slug}"
-                    else:
-                        embed["image"].update(image)
-
-
-                    #  Compile our embedded data properly.
-                    data["embeds"].append(embed)
-
-
-                    # turn the array into proper json formated content.
-                    converted_data = json.dumps(data);
-                    print (f"{Timestamp()}:{converted_data}")
-
-                    # Lets connect to the webhook
-                    if NitroStatus == True:
-                        result = requests.post(Webhook, files=myfiles, headers={"Content-Type": "multipart/form-data"})
-                        #os.remove(f"{slug}.mp4")
-                    else:
-                        result = requests.post(Webhook, converted_data, headers={"Content-Type": "application/json"})
-
-                    try:
-                        result.raise_for_status()
-                    except requests.exceptions.HTTPError as discordError:
-                        print(f"{Timestamp()}:{discordError}")
-                    else:
-                        print(f"{Timestamp()}:Discord successfully recieved the package, code {result.status_code}.")
-
-                    #os.remove(f"{slug}.mp4")
-                    '''
                 else:
                     # Debugging purposes
                     WriteLog("Discord Webhooks not currently installed.")
