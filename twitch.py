@@ -39,7 +39,7 @@ from discord_webhook import DiscordWebhook, DiscordEmbed
 from twitchAPI.twitch import Twitch
 
 # get the datetime
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 ###########################################################################################################
 # Our Discord WebHook URL
@@ -56,15 +56,13 @@ NitroStatus = False
 # Identify the folder to write our files to.
 Folder = ""
 
+
 ###########################################################################################################
 # Name the streamer to monitor
 Streamer = ""
 
-# How far back to check in the archive of clips to download
-Period_To_Check = "day"
-
 # Total amount of clips to download in one pass. (at 5 minute intervals, clips should not exceed 10, or really, 2)
-Clips_To_Download = 10
+Clips_To_Download = 100
 
 # Time till next query in seconds
 Clip_Query_Timer = 300 # 300 seconds = 5 minutes
@@ -84,7 +82,25 @@ Twitch_Secret = ''
 Twitch_ID = ''
 Twitch_Access_Token = ''
 Twitch_Headers = ''
+Twitch_Broadcaster_ID = '' # This is used by Helix API for clips (moving away from Kraken)
+Twitch_Everyone = False
 
+
+###########################################################################################################
+# Urls for twitch
+# lumped these here in-case we have to change them later on, this way we effect it globally throughout the
+# application. Should make it faster/easier.
+OAUTH_URL = "https://id.twitch.tv/oauth2/token"
+SEARCH_URL = "https://api.twitch.tv/helix/search/channels"
+STREAMS_URL = "https://api.twitch.tv/helix/streams"
+CLIPS_URL = "https://api.twitch.tv/helix/clips"
+GAMES_URL = "https://api.twitch.tv/helix/games"
+
+###########################################################################################################
+## Function: Timestamp
+## Arguments: none
+##
+## example: someTime = Timestamp()
 def Timestamp():
     dateTimeObj = datetime.now()
     timestampStr = dateTimeObj.strftime("%d-%b-%Y (%H:%M:%S.%f)")
@@ -97,6 +113,8 @@ def Timestamp():
 ##
 ## example: WriteLog(f"Some data {data}")
 def WriteLog(str):
+    theCurrentTime = Timestamp()
+    
     # write the log to the flat-file
     if LOG_MODE == True:
         log_dir = f"{os.path.dirname(os.path.realpath(__file__))}/logs"
@@ -109,12 +127,12 @@ def WriteLog(str):
         pathN = date.strftime("%d-%b_%Y")
 
         logF = open(f"{log_dir}/log_{pathN}.txt", "a")
-        logF.write(f"{Timestamp()}: {str}\n")
+        logF.write(f"{theCurrentTime}: {str}\n")
         logF.close()
 
     # write the log to the console?
     if PRINT_LOG == True:
-        print(f"{Timestamp()}: {str}")
+        print(f"{theCurrentTime}: {str}")
     
 
 ###########################################################################################################
@@ -124,8 +142,10 @@ def WriteLog(str):
 ## This will connect and download the twitch token again, which expires, so this is vital to reconnect every
 ## now and then to ensure we do not expire. Based on 5 minute intervals, 
 def Reconnect():
-    Get_Twitch_Token()
     global Twitch_Headers
+
+    # grab our twitch token. (resets our connection data for timeout)
+    Get_Twitch_Token()
 
     # build our globally used header (multitasking at its best)
     Twitch_Headers = {"Client-ID": Twitch_ID, "Authorization": "Bearer " + Twitch_Access_Token}
@@ -208,6 +228,7 @@ def Read_Twitch_Config():
     global Streamer
     global Folder
     global NitroStatus
+    global Twitch_Everyone
     
     configFile = open("Config.txt")
     for line in configFile:
@@ -236,6 +257,13 @@ def Read_Twitch_Config():
             else:
                 NitroStatus = False
             WriteLog(f"NitroStatus: {NitroStatus}")
+        elif line.startswith("WhoToDownload:"):
+            strToView = line[line.index(":")+1:].strip()
+            if strToView == 'true':
+                Twitch_Everyone = True
+            else:
+                Twitch_Everyone = False
+            WriteLog(f"Twitch Everyone: {Twitch_Everyone}")
         elif line.startswith("#"):
             # do nothing
             doNothing = True #this is here to just stop stupid warnings for now.
@@ -259,12 +287,26 @@ def Get_Twitch_Token():
     global Twitch_ID
     global Twitch_Secret
     global Twitch_Access_Token
-    autURL = "https://id.twitch.tv/oauth2/token"
+    global Twitch_Broadcaster_ID
+    
+    autURL = OAUTH_URL
     autParams={"client_id": Twitch_ID, "client_secret": Twitch_Secret, "grant_type": "client_credentials"}
     autCall = requests.post(url=autURL, params=autParams)
     autData=autCall.json()
     Twitch_Access_Token = autData["access_token"]
 
+    bidUrl = f"{SEARCH_URL}?query={Streamer}"
+    Twitch_Headers = {"Client-ID": Twitch_ID, "Authorization": "Bearer " + Twitch_Access_Token}
+    params = {"user_login": f"{Streamer}"} 
+
+    bidJSon = requests.get(url=bidUrl, headers=Twitch_Headers, params=params).json()
+    #print (bidJSon)
+
+    bidData = bidJSon.get('data')
+
+    Twitch_Broadcaster_ID = bidData[0]['id']
+    #print(Twitch_Broadcaster_ID)
+    
 	
 ###########################################################################################################
 ## Function: Check_User_Online
@@ -273,7 +315,7 @@ def Get_Twitch_Token():
 def Check_User_Online(user):
 
     # Okay, build the stream URL path
-    streamsURL = "https://api.twitch.tv/helix/streams"
+    streamsURL = STREAMS_URL
 
     # our parameters, we just need our streamer name.
     params = {"user_login": f"{Streamer}"} #used to pass the username to the API call
@@ -293,6 +335,17 @@ def Check_User_Online(user):
 
     # return our status because science
     return status
+
+###########################################################################################################
+## Function: rfc3339
+## Arguments: datetime
+##
+## example timeData = rfc3339(datetime.now())
+def rfc3339(timeData: datetime):
+    s = timeData.astimezone(timezone.utc).isoformat()
+    ending = '+00:00'
+    assert (s.endswith(ending))
+    return s[:-len(ending)] + 'Z'
 	
 ###########################################################################################################
 ## Function: Download_Clips
@@ -300,18 +353,34 @@ def Check_User_Online(user):
 ##
 def Download_Clips(total_clips):
     global NitroStatus
-    
-    dl_headers = {'Accept':"application/vnd.twitchtv.v5+json", 'Client-ID': Twitch_ID}
 
     # Initialize our clips to 0
     Clips = []
 
-    #kraken API (v5) may no longer work. We will check fully on Monday and adjust accordingly.
-    response = requests.get("https://api.twitch.tv/kraken/clips/top", params = {"channel": Streamer, "trending": "false", "period": Period_To_Check, "limit": total_clips, "language": "en"}, headers=dl_headers).json()
+    start_time = start_time=datetime.now() - timedelta(days=5)
+    end_time = datetime.now()
+
+    started_at='{}'.format(rfc3339(start_time))
+    ended_at='{}'.format(rfc3339(end_time))
+
+    #print(started_at)
+    #print(ended_at)
+    
+
+    # let us just list clips via the Helix format
+    response = requests.get(CLIPS_URL, params = {"broadcaster_id": Twitch_Broadcaster_ID,
+                                                 "First": Clips_To_Download, "started_at": started_at,
+                                                 "ended_at": ended_at },
+                            headers=Twitch_Headers).json() 
+    #print (response)
+
     Clips.append(response)
 
+    #print (Clips)
+
     for json_holder in Clips:
-        for json_data in json_holder["clips"]:
+        #print (json_holder)
+        for json_data in json_holder["data"]:
         
             ###########################################################################################################
             #Thanks to @CommanderRoot for the quick references to help set this up. (https://twitter.com/CommanderRoot/status/1326963131134996482?s=20)
@@ -322,15 +391,39 @@ def Download_Clips(total_clips):
             #print (json)
 
             title = ''.join(i for i in json_data["title"] if i not in invalid_chars)
-            slug = ''.join(i for i in json_data["slug"] if i not in invalid_chars)
-            Category = json_data["game"]
-            Channel = ''.join(i for i in json_data["broadcaster"]["display_name"] if i not in invalid_chars)
+            slug = ''.join(i for i in json_data["id"] if i not in invalid_chars)
+
+            Fix = []
+            Category = json_data["game_id"]
+
+            # Okay, let us fix the category, since Helix uses an ID and not a name (unlike Kraken)
+            # so we have to lookup the game, find it, convert it, re-display it. Easy Peasy..
+            gamefix = requests.get(GAMES_URL, params = {"id": Category}, headers=Twitch_Headers).json()
+            Fix.append(gamefix)
+
+            #print (json_data["pagination"])
+
+            # Parse the data for the game information.
+            for g_holder in Fix:
+                #print (json_holder)
+                for gameData in g_holder["data"]:
+                    Category = gameData['name']
+                                        
+            Channel = json_data["broadcaster_name"]
             created_at = json_data["created_at"]
+
+            # find out who created the clip.
+            creator_id = json_data["creator_id"]
+            #if one, or both of these are true, then we continue on and download the video like a baws
+            #otherwise, we move on to the next video here.
+            #if creator_id is not Twitch_Broadcaster_ID and Twitch_Everyone is False:
+            #    continue
+                                   
             #for use in the discord integration (webhook w/embeds)
-            preview_url = json_data["thumbnails"]["medium"]
+            preview_url = json_data["thumbnail_url"]
 
             #this pythonic enough?
-            vod_url = json_data["vod"]["preview_image_url"].replace('-preview.jpg', '.mp4')
+            vod_url = json_data["thumbnail_url"].split("-preview",1)[0] + ".mp4"
 
             # Identify the file-to save.
             Filename = f"{Folder}/{slug}.mp4"
@@ -372,7 +465,7 @@ def Download_Clips(total_clips):
 
                     #not quite yet, TODO: Fix this, it does not turn : into %3A, must ensure all values are properly converted
                     #so that twitch will recognize the game properly when linked, but it is coming.
-                    print(f"catFix: {catFix}")
+                    #print(f"catFix: {catFix}")
                     
                     embed.add_embed_field(name='Game', value=f"[{Category}](https://www.twitch.tv/directory/game/{catFix})")
                     embed.add_embed_field(name='Channel', value=f'[{Streamer}](https://www.twitch.tv/{Streamer})')
