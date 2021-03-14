@@ -20,4 +20,9 @@ Streamer: SimmyDizzle
 #This is the nitro status, true or false, if the server is nitro, we will upload the video to discord
 #if this is false, we simply embed the twitch link.
 Nitro: true
+##########################################################################################################
+##Set this to true if you want to download everyone's clips of your stream, not just your own.
+##if you set this to false, it will only download the person marked in the Streamer config entry.
+##that is it, that is all. If you want to download your communities clips, set this to true.
+WhoToDownload: false
 #EOF
