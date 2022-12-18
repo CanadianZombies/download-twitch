@@ -10,7 +10,7 @@
 [![Code style](https://img.shields.io/badge/code%20style-black-000000.svg?style=plastic)](https://github.com/psf/black)
 [![Donate PayPal](https://img.shields.io/badge/donate-paypal-blue.svg?style=plastic)](https://www.paypal.me/simmydizzle)
 [![YouTube Channel Views](https://img.shields.io/youtube/channel/views/UCkGvCQ1MiG1gt3Z5noI_mRA?style=plastic)](https://www.youtube.com/channel/UCkGvCQ1MiG1gt3Z5noI_mRA)
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Y8Y1G8OE4)]
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Y8Y1G8OE4)
 
 <!-- PROJECT LOGO -->
 <br />
